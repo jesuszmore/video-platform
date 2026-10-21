@@ -1,0 +1,10 @@
+<header class="topbar">
+  <a class="brand" routerLink="/">video-platform</a>
+  <nav>
+    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Mis videos</a>
+    <a routerLink="/upload" routerLinkActive="active">Subir</a>
+  </nav>
+</header>
+<main class="app-shell">
+  <router-outlet />
+</main>

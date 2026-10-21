@@ -1,0 +1,20 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:worker;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  sql:
+    init:
+      mode: always
+
+app:
+  aws:
+    region: us-east-1
+    endpoint: ${AWS_ENDPOINT:http://localhost:4566}
+  sqs:
+    transcode-queue-url: ${TRANSCODE_QUEUE_URL:http://localhost:4566/000000000000/transcode-queue}
+  cloudfront:
+    base-url: ${CLOUDFRONT_BASE_URL:http://localhost:4566/video-processed}
+  worker:
+    enabled: ${WORKER_ENABLED:true}

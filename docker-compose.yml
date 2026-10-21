@@ -1,0 +1,95 @@
+services:
+  # Emulador AWS local (drop-in de LocalStack) en http://localhost:4566
+  floci:
+    image: floci/floci:latest
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_DEFAULT_REGION: us-east-1
+      FLOCI_STORAGE_MODE: memory
+
+  # Siembra buckets y colas en Floci y termina
+  floci-init:
+    image: amazon/aws-cli:2.17.0
+    depends_on:
+      - floci
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://floci:4566
+    volumes:
+      - ./scripts:/scripts:ro
+    entrypoint: ["/bin/sh", "/scripts/floci-init.sh"]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: videos
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d videos"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  backend:
+    image: video-platform/backend:local
+    build:
+      context: ./backend
+    depends_on:
+      floci-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: jdbc:postgresql://postgres:5432/videos
+      DB_USER: app
+      DB_PASSWORD: app
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT: http://floci:4566
+      # Las URLs prefirmadas apuntan a localhost para que el navegador del host pueda usarlas
+      AWS_PRESIGN_ENDPOINT: http://localhost:4566
+      RAW_BUCKET: video-raw
+      PROCESSED_BUCKET: video-processed
+      TRANSCODE_QUEUE_URL: http://floci:4566/000000000000/transcode-queue
+
+  frontend:
+    image: video-platform/frontend:local
+    build:
+      context: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8081:80"
+
+  worker:
+    image: video-platform/worker:local
+    build:
+      context: ./worker
+    depends_on:
+      floci-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_URL: jdbc:postgresql://postgres:5432/videos
+      DB_USER: app
+      DB_PASSWORD: app
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT: http://floci:4566
+      RAW_BUCKET: video-raw
+      PROCESSED_BUCKET: video-processed
+      TRANSCODE_QUEUE_URL: http://floci:4566/000000000000/transcode-queue
+      CLOUDFRONT_BASE_URL: http://localhost:4566/video-processed
+      WORKER_WORK_DIR: /tmp/work
+
+volumes:
+  postgres-data:

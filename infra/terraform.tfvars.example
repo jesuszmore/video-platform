@@ -1,0 +1,18 @@
+# Copia este archivo a terraform.tfvars y ajusta los valores.
+
+region  = "eu-west-1"
+prefix  = "video-platform"
+
+# Origen permitido en CORS del bucket raw (URL de tu frontend)
+app_origin = "https://app.midominio.com"
+
+# Issuer OIDC del proveedor de identidad (por ejemplo Cognito)
+jwt_issuer = "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_XXXXXXXXX"
+
+# Aurora Serverless v2: 0 ACU minimo = escala a cero en reposo
+db_min_acu = 0
+db_max_acu = 4
+
+# Deja vacio para usar las imagenes :latest de los repos ECR creados por este stack
+backend_image = ""
+worker_image  = ""

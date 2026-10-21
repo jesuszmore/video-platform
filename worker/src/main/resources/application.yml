@@ -1,0 +1,43 @@
+spring:
+  application:
+    name: video-worker
+  profiles:
+    default: local
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/videos}
+    username: ${DB_USER:app}
+    password: ${DB_PASSWORD:app}
+    hikari:
+      maximum-pool-size: 2
+      minimum-idle: 0
+  sql:
+    init:
+      mode: never
+  main:
+    web-application-type: none
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+app:
+  aws:
+    region: ${AWS_REGION:eu-west-1}
+  s3:
+    raw-bucket: ${RAW_BUCKET:video-raw}
+    processed-bucket: ${PROCESSED_BUCKET:video-processed}
+  sqs:
+    transcode-queue-url: ${TRANSCODE_QUEUE_URL:}
+    wait-time-seconds: 20
+    visibility-timeout-seconds: ${VISIBILITY_TIMEOUT:3600}
+    max-receive-count: ${MAX_RECEIVE_COUNT:3}
+  worker:
+    enabled: ${WORKER_ENABLED:true}
+    heartbeat-minutes: ${WORKER_HEARTBEAT_MINUTES:5}
+    work-dir: ${WORKER_WORK_DIR:}
+  cloudfront:
+    base-url: ${CLOUDFRONT_BASE_URL:}
+  ffmpeg:
+    preset: ${FFMPEG_PRESET:veryfast}

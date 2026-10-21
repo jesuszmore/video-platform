@@ -1,0 +1,105 @@
+<section class="gallery">
+  <header class="head">
+    <div>
+      <h1>Mis videos</h1>
+      <p class="hint">Subidas multipart + transcodificacion HLS asincrona.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" (click)="load()" [disabled]="loading()">
+        {{ loading() ? 'Cargando...' : 'Refrescar' }}
+      </button>
+      <a class="primary" routerLink="/upload">Subir video</a>
+    </div>
+  </header>
+
+  <nav class="filters">
+    @for (f of filters; track f) {
+      <button
+        type="button"
+        class="chip"
+        [class.active]="filter() === f"
+        (click)="setFilter(f)"
+      >
+        {{ f }} <span class="count">{{ counts()[f] }}</span>
+      </button>
+    }
+  </nav>
+
+  @if (error()) {
+    <p class="error">{{ error() }}</p>
+  }
+
+  @if (loading() && videos().length === 0) {
+    <p class="muted">Cargando...</p>
+  } @else if (visible().length === 0) {
+    <div class="empty">
+      <p>No hay videos{{ filter() === 'ALL' ? ' todavia' : ' con este estado' }}.</p>
+      <a class="primary" routerLink="/upload">Sube el primero</a>
+    </div>
+  } @else {
+    <ul class="grid">
+      @for (v of visible(); track v.id) {
+        <li class="card" [class.clickable]="v.status === 'READY'" (click)="open(v)">
+          <div class="thumb">
+            @if (v.thumbnailUrl) {
+              <img [src]="v.thumbnailUrl" [alt]="'Miniatura de ' + v.id" loading="lazy" />
+            } @else {
+              <span class="placeholder">{{ v.status }}</span>
+            }
+            <span class="badge status-{{ v.status.toLowerCase() }}">{{ v.status }}</span>
+            @if (v.durationSeconds) {
+              <span class="duration">{{ v.durationSeconds }}s</span>
+            }
+          </div>
+          <div class="meta">
+            <span class="name" [title]="v.id">{{ v.id }}</span>
+            <span class="sub">
+              {{ sizeLabel(v.sizeBytes) }} · {{ v.createdAt | date: 'short' }}
+              @if (elapsedLabel(v)) {
+                · {{ elapsedLabel(v) }}
+              }
+            </span>
+            @if (v.errorMessage) {
+              <span class="err" [title]="v.errorMessage">{{ v.errorMessage }}</span>
+            }
+            <div class="card-actions">
+              @if (canRetry(v)) {
+                <button
+                  type="button"
+                  class="mini"
+                  [disabled]="actionId() === v.id"
+                  (click)="$event.stopPropagation(); retry(v)"
+                >
+                  Reintentar
+                </button>
+              }
+              <button
+                type="button"
+                class="mini danger"
+                [disabled]="actionId() === v.id"
+                (click)="$event.stopPropagation(); remove(v)"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+        </li>
+      }
+    </ul>
+  }
+</section>
+
+@if (selected(); as video) {
+  <div class="overlay" (click)="close()">
+    <div class="modal" (click)="$event.stopPropagation()">
+      <div class="modal-head">
+        <span class="mono">{{ video.id }}</span>
+        <button type="button" class="ghost" (click)="close()">Cerrar</button>
+      </div>
+      <app-hls-player [src]="video.hlsManifestUrl" />
+      <p class="sub">
+        {{ sizeLabel(video.sizeBytes) }} · {{ video.durationSeconds }}s · HLS adaptativo
+      </p>
+    </div>
+  </div>
+}

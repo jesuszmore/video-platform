@@ -1,0 +1,36 @@
+<section class="upload">
+  <h1>Subida de video</h1>
+  <p class="hint">
+    Subida multipart directa a S3 con URLs prefirmadas y procesado asincrono con FFmpeg.
+  </p>
+
+  <label class="picker">
+    <input type="file" [attr.accept]="accept" (change)="onFileSelected($event)" />
+    <span>Selecciona un video</span>
+  </label>
+
+  @if (phase() === 'uploading') {
+    <div class="block">
+      <div class="bar"><div class="fill" [style.width.%]="progress()"></div></div>
+      <p class="status">Subiendo... {{ progress() }}%</p>
+    </div>
+  }
+
+  @if (phase() === 'processing') {
+    <p class="status">Procesando ({{ status() }})... esto puede tardar unos minutos.</p>
+  }
+
+  @if (phase() === 'error') {
+    <p class="error">Error: {{ error() }}</p>
+  }
+
+  @if (phase() === 'ready' && video()) {
+    <div class="block">
+      <p class="status">Listo. Estado: {{ status() }} · Duracion: {{ video()!.durationSeconds }}s</p>
+      @if (video()!.thumbnailUrl) {
+        <img class="thumb" [src]="video()!.thumbnailUrl" alt="Miniatura" />
+      }
+      <app-hls-player [src]="video()!.hlsManifestUrl" />
+    </div>
+  }
+</section>
