@@ -36,6 +36,7 @@ app:
   worker:
     enabled: ${WORKER_ENABLED:true}
     heartbeat-minutes: ${WORKER_HEARTBEAT_MINUTES:5}
+    processing-stale-minutes: ${PROCESSING_STALE_MINUTES:30}
     work-dir: ${WORKER_WORK_DIR:}
   cloudfront:
     base-url: ${CLOUDFRONT_BASE_URL:}

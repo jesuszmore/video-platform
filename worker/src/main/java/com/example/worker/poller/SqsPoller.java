@@ -22,6 +22,8 @@ import software.amazon.awssdk.services.sqs.model.SqsException;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.UUID;
 import java.util.concurrent.Executors;
@@ -47,6 +49,7 @@ public class SqsPoller {
     private final int visibilityTimeoutSeconds;
     private final int maxReceiveCount;
     private final long heartbeatMinutes;
+    private final long staleMinutes;
     private final ScheduledExecutorService heartbeatExecutor;
 
     private final AtomicBoolean running = new AtomicBoolean(true);
@@ -57,7 +60,8 @@ public class SqsPoller {
                      @Value("${app.sqs.wait-time-seconds:20}") int waitTimeSeconds,
                      @Value("${app.sqs.visibility-timeout-seconds:3600}") int visibilityTimeoutSeconds,
                      @Value("${app.sqs.max-receive-count:3}") int maxReceiveCount,
-                     @Value("${app.worker.heartbeat-minutes:5}") long heartbeatMinutes) {
+                     @Value("${app.worker.heartbeat-minutes:5}") long heartbeatMinutes,
+                     @Value("${app.worker.processing-stale-minutes:30}") long staleMinutes) {
         this.sqs = sqs;
         this.objectMapper = objectMapper;
         this.storage = storage;
@@ -68,6 +72,7 @@ public class SqsPoller {
         this.visibilityTimeoutSeconds = visibilityTimeoutSeconds;
         this.maxReceiveCount = maxReceiveCount;
         this.heartbeatMinutes = heartbeatMinutes;
+        this.staleMinutes = staleMinutes;
         ThreadFactory factory = r -> {
             Thread thread = new Thread(r, "sqs-heartbeat");
             thread.setDaemon(true);
@@ -128,7 +133,8 @@ public class SqsPoller {
             return;
         }
 
-        if (!dao.claim(videoId)) {
+        Instant staleBefore = Instant.now().minus(staleMinutes, ChronoUnit.MINUTES);
+        if (!dao.claim(videoId, staleBefore)) {
             String status = dao.statusOf(videoId);
             if ("QUEUED".equals(status)) {
                 // No deberia ocurrir tras publicar en SQS despues del commit, pero si
@@ -137,12 +143,17 @@ public class SqsPoller {
                 releaseSoon(message);
                 return;
             }
-            log.info("Video {} en estado {}; se descarta el mensaje", videoId, status);
+            if ("PROCESSING".equals(status)) {
+                // Otro worker (o este mismo) lo esta procesando y sigue vivo.
+                log.info("Video {} sigue PROCESSING y esta vivo; se descarta el mensaje duplicado", videoId);
+            } else {
+                log.info("Video {} en estado {}; se descarta el mensaje", videoId, status);
+            }
             delete(message);
             return;
         }
 
-        ScheduledFuture<?> heartbeat = scheduleHeartbeat(message.receiptHandle());
+        ScheduledFuture<?> heartbeat = scheduleHeartbeat(message.receiptHandle(), videoId);
         Path workDir = null;
         try {
             StorageService.Download download = storage.downloadOriginal(videoId, job.bucket(), job.key());
@@ -158,9 +169,14 @@ public class SqsPoller {
             int receiveCount = receiveCount(message);
             if (receiveCount >= maxReceiveCount) {
                 dao.markFailed(videoId, ex.getMessage());
+                // Terminal: el mensaje ya no se reintenta, se borra para no reentregarlo.
+                delete(message);
                 log.error("Video {} fallido definitivamente (intento {}): {}", videoId, receiveCount, ex.getMessage());
             } else {
                 dao.resetToQueued(videoId);
+                // Sin esto el mensaje quedaria invisible hasta 1h (visibility timeout)
+                // antes de reintentarse.
+                releaseSoon(message);
                 log.warn("Video {} fallo (intento {}), se reintentara: {}", videoId, receiveCount, ex.getMessage());
             }
         } finally {
@@ -169,7 +185,7 @@ public class SqsPoller {
         }
     }
 
-    private ScheduledFuture<?> scheduleHeartbeat(String receiptHandle) {
+    private ScheduledFuture<?> scheduleHeartbeat(String receiptHandle, UUID videoId) {
         if (heartbeatMinutes <= 0) {
             return heartbeatExecutor.schedule(() -> {
             }, 0, TimeUnit.SECONDS);
@@ -182,6 +198,8 @@ public class SqsPoller {
                         .receiptHandle(receiptHandle)
                         .visibilityTimeout(visibilityTimeoutSeconds)
                         .build());
+                // Mantiene el job "vivo" en BD para que no se reclame como caducado.
+                dao.touch(videoId);
                 log.debug("Heartbeat de visibilidad extendido");
             } catch (Exception ex) {
                 log.warn("No se pudo extender la visibilidad: {}", ex.getMessage());

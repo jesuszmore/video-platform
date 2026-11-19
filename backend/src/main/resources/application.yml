@@ -52,3 +52,7 @@ app:
     min-part-size: ${UPLOAD_MIN_PART_SIZE:5242880}
     default-part-size: ${UPLOAD_DEFAULT_PART_SIZE:8388608}
     max-parts: ${UPLOAD_MAX_PARTS:10000}
+  reaper:
+    enabled: ${REAPER_ENABLED:true}
+    stale-minutes: ${PROCESSING_STALE_MINUTES:30}
+    interval-ms: ${REAPER_INTERVAL_MS:120000}

@@ -17,6 +17,12 @@ video-platform/
 └─ docker-compose.yml  Floci + Postgres + backend + worker + frontend (entorno local completo)
 ```
 
+## Documentación
+
+- [Servicios de AWS y su impacto en el proyecto](docs/aws-services.md): arquitectura,
+  flujo de subida, S3/SQS/CloudFront/ECS/Aurora/IAM/KMS, variables de entorno, matriz de
+  fallos y hallazgos.
+
 ## Requisitos
 
 - JDK 21
@@ -87,6 +93,11 @@ la galeria muestra los mismos videos que crean los scripts e2e.
   **despues** de confirmar `status = QUEUED`. Publicarlo dentro de la transaccion causaba
   una carrera: el worker recibia el mensaje antes del commit, no veia el `QUEUED` y lo
   descartaba, dejando el video atascado en QUEUED.
+- **Recuperacion de PROCESSING atascados**: si el worker muere a mitad de un job, el
+  mensaje reentregado puede reclamar el video pasado `PROCESSING_STALE_MINUTES` (30 por
+  defecto), y el backend tiene un reaper que cada `REAPER_INTERVAL_MS` (2 min) devuelve a
+  `QUEUED` los videos `PROCESSING` sin heartbeat y vuelve a publicar el job. El heartbeat
+  del worker refresca `updated_at` para no interrumpir trabajos largos.
 
 Alternativa: frontend en modo dev con recarga en caliente (proxy `/api` -> `localhost:8080`):
 

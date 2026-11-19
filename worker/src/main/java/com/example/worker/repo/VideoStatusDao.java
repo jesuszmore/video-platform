@@ -3,6 +3,7 @@ package com.example.worker.repo;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Repository
@@ -14,11 +15,26 @@ public class VideoStatusDao {
         this.jdbc = jdbc;
     }
 
-    public boolean claim(UUID videoId) {
+    /**
+     * Reclama un job QUEUED o uno PROCESSING que ya no esta vivo (su worker
+     * desaparecio sin actualizar {@code updated_at}). Asi un mensaje reentregado
+     * por SQS puede recuperar un video que quedaria atascado para siempre.
+     */
+    public boolean claim(UUID videoId, Instant staleBefore) {
         int updated = jdbc.update(
-                "update videos set status = 'PROCESSING', updated_at = now() where id = ? and status = 'QUEUED'",
-                videoId);
+                "update videos set status = 'PROCESSING', updated_at = now() "
+                        + "where id = ? and (status = 'QUEUED' "
+                        + "or (status = 'PROCESSING' and updated_at < ?))",
+                videoId, staleBefore);
         return updated > 0;
+    }
+
+    /**
+     * Marca el job como vivo. Lo llama el heartbeat para que otros workers no
+     * consideren caducado un trabajo largo.
+     */
+    public void touch(UUID videoId) {
+        jdbc.update("update videos set updated_at = now() where id = ? and status = 'PROCESSING'", videoId);
     }
 
     public String statusOf(UUID videoId) {
